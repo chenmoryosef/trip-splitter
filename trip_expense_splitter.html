@@ -168,6 +168,60 @@
             opacity: 0.8;
         }
 
+        .sharing-section {
+            background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+            border: 2px solid rgba(40, 167, 69, 0.2);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.1);
+            display: none;
+        }
+
+        .sharing-title {
+            color: #155724;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .sharing-link {
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 14px;
+            color: #155724;
+            text-decoration: none;
+            display: block;
+            margin-bottom: 10px;
+            word-break: break-all;
+            transition: all 0.3s ease;
+        }
+
+        .sharing-link:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
+        }
+
+        .copy-button {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .copy-button:hover {
+            background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+            transform: translateY(-1px);
+        }
+
         .sync-status {
             position: fixed;
             top: 10px;
@@ -368,25 +422,6 @@
             margin-left: 10px;
         }
 
-        .summary {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-            padding: 20px;
-            border-radius: 15px;
-            margin-top: 20px;
-        }
-
-        .summary-title {
-            color: #92400e;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            color: #92400e;
-        }
 
         .empty-state {
             text-align: center;
@@ -441,6 +476,15 @@
                 </div>
             </div>
 
+            <!-- Sharing Section -->
+            <div id="sharingSection" class="sharing-section">
+                <div class="sharing-title">📤 Share with Maya</div>
+                <a id="sharingLink" href="#" class="sharing-link" onclick="openShareUrl(event)">
+                    Sharing URL will appear here...
+                </a>
+                <button onclick="copyShareUrl()" class="copy-button">📋 Copy Link</button>
+            </div>
+
             <button class="add-expense" onclick="toggleExpenseForm()">
                 + Add New Expense
             </button>
@@ -484,21 +528,6 @@
                 <div id="expensesList"></div>
             </div>
 
-            <div class="summary" id="summary" style="display: none;">
-                <div class="summary-title">Trip Summary</div>
-                <div class="summary-item">
-                    <span>Total Expenses:</span>
-                    <span id="totalExpenses">$0.00</span>
-                </div>
-                <div class="summary-item">
-                    <span>Chen Paid:</span>
-                    <span id="chenPaid">$0.00</span>
-                </div>
-                <div class="summary-item">
-                    <span>Maya Paid:</span>
-                    <span id="mayaPaid">$0.00</span>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -638,19 +667,9 @@
                     updateSyncStatus('online');
                     console.log('Gist created successfully:', gist.id);
                     
+                    // Show sharing link in UI instead of alert
                     setTimeout(() => {
-                        const shareUrl = window.location.href;
-                        if (navigator.share) {
-                            navigator.share({
-                                title: 'Trip Expense Splitter',
-                                text: 'Join my trip expense tracker!',
-                                url: shareUrl
-                            }).catch(() => {
-                                alert(`Share this URL with Maya:\n\n${shareUrl}`);
-                            });
-                        } else {
-                            alert(`Share this URL with Maya:\n\n${shareUrl}`);
-                        }
+                        showSharingLink();
                     }, 500);
                     
                     return gist.id;
@@ -1024,15 +1043,9 @@
                 `).join('');
             }
 
-            // Update summary
-            if (expenses.length > 0) {
-                document.getElementById('summary').style.display = 'block';
-                document.getElementById('totalExpenses').textContent = 
-                    `$${expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}`;
-                document.getElementById('chenPaid').textContent = `$${tripData.chen.paid.toFixed(2)}`;
-                document.getElementById('mayaPaid').textContent = `$${tripData.maya.paid.toFixed(2)}`;
-            } else {
-                document.getElementById('summary').style.display = 'none';
+            // Show sharing link if we have a valid gist ID
+            if (gistId && gistId.length >= 20) {
+                showSharingLink();
             }
         }
 
@@ -1040,6 +1053,43 @@
             tripData.name = e.target.value;
             saveData();
         });
+
+        // Sharing functionality functions
+        function showSharingLink() {
+            const sharingSection = document.getElementById('sharingSection');
+            const shareUrl = document.getElementById('sharingLink');
+            
+            if (gistId && gistId.length >= 20) { // Valid gist ID
+                const fullUrl = `${window.location.origin}${window.location.pathname}?gist=${gistId}`;
+                shareUrl.textContent = fullUrl;
+                shareUrl.href = fullUrl;
+                sharingSection.style.display = 'block';
+            }
+        }
+
+        function copyShareUrl() {
+            const shareUrl = document.getElementById('sharingLink').textContent;
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                const copyBtn = document.querySelector('.copy-button');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ Copied!';
+                copyBtn.style.background = '#27ae60';
+                
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.background = 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy URL:', err);
+                alert('Failed to copy URL. Please copy it manually.');
+            });
+        }
+
+        function openShareUrl(event) {
+            event.preventDefault();
+            const shareUrl = document.getElementById('sharingLink').href;
+            window.open(shareUrl, '_blank');
+        }
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', async () => {
