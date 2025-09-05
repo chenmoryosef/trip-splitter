@@ -466,70 +466,39 @@
             window.history.replaceState({}, '', newUrl);
         }
 
-        async function createGist() {
-            const data = {
-                expenses,
-                tripData,
-                lastUpdated: Date.now()
-            };
-
-            const gistData = {
-                description: `Trip Expenses: ${tripData.name}`,
-                public: false,
-                files: {
-                    "trip-expenses.json": {
-                        content: JSON.stringify(data, null, 2)
-                    }
-                }
-            };
-
-            try {
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/vnd.github.v3+json'
-                };
-
-                if (githubToken) {
-                    headers['Authorization'] = `token ${githubToken}`;
-                }
-
-                const response = await fetch('https://api.github.com/gists', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(gistData)
-                });
-
-                if (response.ok) {
-                    const gist = await response.json();
-                    setGistId(gist.id);
-                    updateSyncStatus('online');
-                    
-                    setTimeout(() => {
-                        const shareUrl = window.location.href;
-                        if (navigator.share) {
-                            navigator.share({
-                                title: 'Trip Expense Splitter',
-                                text: 'Join my trip expense tracker!',
-                                url: shareUrl
-                            });
-                        } else {
-                            prompt('Share this URL with Maya:', shareUrl);
-                        }
-                    }, 500);
-                    
-                    return gist.id;
+        async function createSimpleShare() {
+            // Generate a simple sharing ID
+            const shareId = Math.random().toString(36).substring(2, 15);
+            setGistId(shareId);
+            
+            // Save to localStorage with share ID
+            const data = { expenses, tripData, lastUpdated: Date.now() };
+            localStorage.setItem(`tripExpenses_${shareId}`, JSON.stringify(data));
+            
+            updateSyncStatus('offline');
+            
+            setTimeout(() => {
+                const shareUrl = window.location.href;
+                const message = `Share this URL with Maya:\n\n${shareUrl}\n\nNOTE: This uses local sharing - you'll both need to add expenses for sync to work. For better sync, you can create a GitHub personal access token.`;
+                
+                if (navigator.share && navigator.share.canShare && navigator.share.canShare({url: shareUrl})) {
+                    navigator.share({
+                        title: 'Trip Expense Splitter',
+                        text: 'Join my trip expense tracker!',
+                        url: shareUrl
+                    }).catch(() => {
+                        alert(message);
+                    });
                 } else {
-                    throw new Error('Failed to create gist');
+                    alert(message);
                 }
-            } catch (error) {
-                console.error('Error creating gist:', error);
-                updateSyncStatus('offline');
-                return null;
-            }
+            }, 500);
+            
+            return shareId;
         }
 
         async function loadFromGist() {
-            if (!gistId) return false;
+            if (!gistId || gistId.startsWith('local_')) return false;
 
             try {
                 const response = await fetch(`https://api.github.com/gists/${gistId}`);
@@ -549,7 +518,10 @@
                     }
                 } else if (response.status === 404) {
                     updateSyncStatus('offline');
-                    alert('Trip not found. This link may be invalid or the trip may have been deleted.');
+                    console.log('Gist not found - may be using local mode');
+                } else if (response.status === 403) {
+                    updateSyncStatus('offline');
+                    console.log('Rate limited - using local storage');
                 }
             } catch (error) {
                 console.error('Error loading from gist:', error);
@@ -648,10 +620,22 @@
             gistId = getGistId();
             
             if (gistId) {
-                // Try to load existing gist
-                const loaded = await loadFromGist();
-                if (loaded) {
-                    startSync();
+                // First try to load from localStorage with this share ID
+                const localData = JSON.parse(localStorage.getItem(`tripExpenses_${gistId}`) || 'null');
+                if (localData) {
+                    expenses = localData.expenses || [];
+                    tripData = localData.tripData || tripData;
+                    document.getElementById('tripName').value = tripData.name;
+                    updateDisplay();
+                    updateSyncStatus('offline');
+                }
+                
+                // Then try to load from GitHub gist (if it's a real gist ID)
+                if (!gistId.startsWith('local_') && gistId.length > 10) {
+                    const loaded = await loadFromGist();
+                    if (loaded) {
+                        startSync();
+                    }
                 }
             } else {
                 // Load from localStorage as fallback
@@ -670,14 +654,19 @@
             localStorage.setItem('tripExpenses_backup', JSON.stringify(data));
 
             if (!gistId) {
-                // Create new gist
-                await createGist();
+                // Create simple share
+                await createSimpleShare();
                 if (gistId) {
                     startSync();
                 }
             } else {
-                // Update existing gist
-                await saveToGist();
+                // Save to localStorage with share ID
+                localStorage.setItem(`tripExpenses_${gistId}`, JSON.stringify(data));
+                
+                // Try to update gist if it's a real gist ID (not local)
+                if (!gistId.startsWith('local_') && gistId.length > 10) {
+                    await saveToGist();
+                }
             }
         }
 
