@@ -134,11 +134,17 @@
         
         <input type="password" id="githubToken" class="login-input" placeholder="Enter your GitHub token (required)" autofocus>
         
+        <input type="text" id="gistId" class="login-input" placeholder="Enter Gist ID (required)" required>
+        
         <button onclick="login()" class="login-button">Start Tracking Expenses</button>
         
         <div class="login-help">
             <strong>GitHub token is required:</strong><br>
             This enables real-time sync between your devices.<br><br>
+            
+            <strong>Gist ID (required):</strong><br>
+            Enter the gist ID to access shared expenses.<br><br>
+            
             <small><strong>How to get a token:</strong><br>
             1. Go to github.com/settings/tokens<br>
             2. Click "Generate new token (classic)"<br>
@@ -150,6 +156,13 @@
     <script>
         function login() {
             const token = document.getElementById('githubToken').value;
+            const gistId = document.getElementById('gistId').value.trim();
+            
+            // Validate that gist ID is provided
+            if (!gistId) {
+                alert('Please enter a Gist ID');
+                return;
+            }
             
             // Store the token in sessionStorage (even if empty, so we can validate it)
             sessionStorage.setItem('githubToken', token);
@@ -157,22 +170,25 @@
             // Store login state
             sessionStorage.setItem('isLoggedIn', 'true');
             
-            // Get any gist parameter from URL and pass it along
-            const urlParams = new URLSearchParams(window.location.search);
-            const gistId = urlParams.get('gist');
-            
-            // Redirect to main app
-            let appUrl = './trip_expense_splitter.html';
-            if (gistId) {
-                appUrl += '?gist=' + gistId;
-            }
-            
+            // Redirect to main app with gist ID
+            const appUrl = `./trip_expense_splitter.html?gist=${gistId}`;
             window.location.href = appUrl;
         }
 
-        // Add enter key support
+        // Add enter key support and pre-populate gist ID from URL
         document.addEventListener('DOMContentLoaded', () => {
+            // Pre-populate gist ID if it's in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const gistId = urlParams.get('gist');
+            if (gistId) {
+                document.getElementById('gistId').value = gistId;
+            }
+            
+            // Add enter key support
             document.getElementById('githubToken').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+            document.getElementById('gistId').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') login();
             });
         });
