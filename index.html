@@ -136,21 +136,11 @@
         
         <input type="text" id="gistId" class="login-input" placeholder="Enter Gist ID (required)" required>
         
-        <button onclick="login()" class="login-button">Start Tracking Expenses</button>
-        
-        <div class="login-help">
-            <strong>GitHub token is required:</strong><br>
-            This enables real-time sync between your devices.<br><br>
-            
-            <strong>Gist ID (required):</strong><br>
-            Enter the gist ID to access shared expenses.<br><br>
-            
-            <small><strong>How to get a token:</strong><br>
-            1. Go to github.com/settings/tokens<br>
-            2. Click "Generate new token (classic)"<br>
-            3. Select "gist" permissions<br>
-            4. Copy the token and paste it here</small>
+        <div id="buttonContainer" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button onclick="login()" class="login-button" style="flex: 1;">Join Existing Expenses</button>
+            <button id="createGistBtn" onclick="createNewGist()" class="login-button" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">Create New Gist</button>
         </div>
+        
     </div>
 
     <script>
@@ -175,6 +165,72 @@
             window.location.href = appUrl;
         }
 
+        async function createNewGist() {
+            const token = document.getElementById('githubToken').value.trim();
+            
+            if (!token) {
+                alert('Please enter your GitHub token first');
+                return;
+            }
+
+            const createButton = document.querySelector('[onclick="createNewGist()"]');
+            createButton.textContent = 'Creating...';
+            createButton.disabled = true;
+
+            try {
+                // Create initial gist with empty data
+                const gistData = {
+                    description: 'Trip Expenses: Japan 2025',
+                    public: false,
+                    files: {
+                        "trip-expenses.json": {
+                            content: JSON.stringify({
+                                expenses: [],
+                                tripData: {
+                                    name: "Japan 2025",
+                                    chen: { name: "Chen", paid: 0, owes: 0 },
+                                    maya: { name: "Maya", paid: 0, owes: 0 }
+                                },
+                                lastUpdated: Date.now()
+                            }, null, 2)
+                        }
+                    }
+                };
+
+                const response = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Authorization': `token ${token}`
+                    },
+                    body: JSON.stringify(gistData)
+                });
+
+                if (response.ok) {
+                    const gist = await response.json();
+                    document.getElementById('gistId').value = gist.id;
+                    alert(`New gist created successfully!\nGist ID: ${gist.id}\n\nShare this ID with Maya so she can join your expenses.`);
+                } else {
+                    const error = await response.text();
+                    console.error('Failed to create gist:', response.status, error);
+                    if (response.status === 401) {
+                        alert('Invalid GitHub token. Please check your token.');
+                    } else if (response.status === 403) {
+                        alert('GitHub token lacks gist permissions. Please create a token with "gist" scope.');
+                    } else {
+                        alert('Failed to create gist. Please try again.');
+                    }
+                }
+            } catch (error) {
+                console.error('Error creating gist:', error);
+                alert('Network error. Please check your internet connection and try again.');
+            }
+
+            createButton.textContent = 'Create New Gist';
+            createButton.disabled = false;
+        }
+
         // Add enter key support and pre-populate gist ID from URL
         document.addEventListener('DOMContentLoaded', () => {
             // Pre-populate gist ID if it's in the URL
@@ -182,6 +238,13 @@
             const gistId = urlParams.get('gist');
             if (gistId) {
                 document.getElementById('gistId').value = gistId;
+                
+                // Hide create gist button since we're joining existing
+                const createBtn = document.getElementById('createGistBtn');
+                const joinBtn = document.querySelector('[onclick="login()"]');
+                createBtn.style.display = 'none';
+                joinBtn.style.flex = '1';
+                joinBtn.textContent = 'Join Existing Expenses';
             }
             
             // Add enter key support
