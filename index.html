@@ -236,13 +236,16 @@
             // Pre-populate gist ID if it's in the URL
             const urlParams = new URLSearchParams(window.location.search);
             const gistId = urlParams.get('gist');
-            if (gistId) {
+            if (gistId && gistId.length >= 20) { // Valid gist ID
                 document.getElementById('gistId').value = gistId;
                 
-                // Hide create gist button since we're joining existing
+                // Hide create gist button and gist ID input since we're joining existing
                 const createBtn = document.getElementById('createGistBtn');
                 const joinBtn = document.querySelector('[onclick="login()"]');
+                const gistInput = document.getElementById('gistId');
+                
                 createBtn.style.display = 'none';
+                gistInput.style.display = 'none';
                 joinBtn.style.flex = '1';
                 joinBtn.textContent = 'Join Existing Expenses';
             }
