@@ -34,20 +34,21 @@ A real-time expense splitting app for trips and shared activities. Perfect for C
 
 ### 2. Share with Your Friend
 
-1. Open your deployed app URL
-2. Add your first expense
-3. App automatically creates a GitHub Gist and shows sharing URL
-4. Send the sharing URL to Maya
-5. Both devices will sync automatically every 5 seconds!
+1. Open your deployed app URL: `https://YOUR_USERNAME.github.io/trip-splitter/`
+2. Enter password: `chen-maya-2025` (you can change this in the code)
+3. Optionally enter your GitHub token for real-time sync
+4. Add your first expense
+5. Share the URL with Maya (she'll use the same password)
+6. Both devices will sync automatically!
 
 ## 📖 How It Works
 
 ### First Time Setup:
-1. Chen opens the app and adds an expense
-2. App creates a private GitHub Gist automatically
-3. App shows a sharing URL like: `https://your-username.github.io/trip-splitter/trip_expense_splitter.html?gist=abc123`
-4. Chen shares this URL with Maya
-5. Maya opens the URL and sees all expenses in real-time
+1. Chen opens the app at the main URL
+2. Enters password and GitHub token (optional)
+3. Adds first expense - app creates sharing URL automatically
+4. Chen shares the URL with Maya
+5. Maya enters the same password and sees all expenses in real-time
 
 ### Daily Usage:
 - Add expenses from either device

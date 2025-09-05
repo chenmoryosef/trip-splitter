@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Access - Enter Password</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .login-title {
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #1e293b;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            font-size: 16px;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .login-button {
+            width: 100%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .login-help {
+            text-align: center;
+            font-size: 14px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-title">💰 Trip Expenses</div>
+        <div class="login-subtitle">Chen & Maya's Expense Tracker</div>
+        
+        <input type="password" id="githubToken" class="login-input" placeholder="Enter your GitHub token (required)" autofocus>
+        
+        <button onclick="login()" class="login-button">Start Tracking Expenses</button>
+        
+        <div class="login-help">
+            <strong>GitHub token is required:</strong><br>
+            This enables real-time sync between your devices.<br><br>
+            <small><strong>How to get a token:</strong><br>
+            1. Go to github.com/settings/tokens<br>
+            2. Click "Generate new token (classic)"<br>
+            3. Select "gist" permissions<br>
+            4. Copy the token and paste it here</small>
+        </div>
+    </div>
+
+    <script>
+        function login() {
+            const token = document.getElementById('githubToken').value;
+            
+            // Store the token in sessionStorage (even if empty, so we can validate it)
+            sessionStorage.setItem('githubToken', token);
+            
+            // Store login state
+            sessionStorage.setItem('isLoggedIn', 'true');
+            
+            // Get any gist parameter from URL and pass it along
+            const urlParams = new URLSearchParams(window.location.search);
+            const gistId = urlParams.get('gist');
+            
+            // Redirect to main app
+            let appUrl = './trip_expense_splitter.html';
+            if (gistId) {
+                appUrl += '?gist=' + gistId;
+            }
+            
+            window.location.href = appUrl;
+        }
+
+        // Add enter key support
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('githubToken').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+        });
+    </script>
+</body>
+</html>
