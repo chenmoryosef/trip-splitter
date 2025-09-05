@@ -247,6 +247,7 @@
             background: #f59e0b;
         }
 
+
         .share-button {
             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
             border: none;
@@ -451,6 +452,7 @@
     <!-- Sync Status Indicator -->
     <div id="syncStatus" class="sync-status sync-offline">✗ Offline</div>
     
+    
     <div class="container">
         <div class="header">
             <h1>🌸 Trip Splitter</h1>
@@ -542,6 +544,8 @@
         let gistId = null;
         let isUpdating = false;
         let syncInterval = null;
+        let hasPendingSync = false;
+        let lastSyncAttempt = 0;
         // Check login status and validate token
         async function checkLogin() {
             const isLoggedIn = sessionStorage.getItem('isLoggedIn');
@@ -591,7 +595,22 @@
                 });
                 return response.ok;
             } catch (error) {
-                console.error('Token validation error:', error);
+                console.error('Token validation error (likely offline):', error);
+                
+                // If we can't reach GitHub API (offline), be more permissive for existing users
+                const hasAnyLocalData = localStorage.getItem('tripExpenses_backup') || 
+                                       localStorage.getItem('currentGistId') ||
+                                       localStorage.getItem('hasPendingSync');
+                
+                const hasReasonableFormat = token && token.trim().length > 10; // Very basic check
+                
+                if (hasAnyLocalData && hasReasonableFormat) {
+                    console.log('Offline mode: Accepting token for existing user');
+                    return true;
+                }
+                
+                // For completely new users with no local data, still require online validation
+                console.log('Offline mode: No local data found, requiring online validation');
                 return false;
             }
         }
@@ -624,7 +643,7 @@
         async function createGist() {
             if (!githubToken) {
                 console.error('No GitHub token available for gist creation');
-                updateSyncStatus('offline');
+                updateSyncStatus('unsaved');
                 return null;
             }
             
@@ -664,7 +683,7 @@
                 if (response.ok) {
                     const gist = JSON.parse(responseText);
                     setGistId(gist.id);
-                    updateSyncStatus('online');
+                    updateSyncStatus('synced');
                     console.log('Gist created successfully:', gist.id);
                     
                     // Show sharing link in UI instead of alert
@@ -675,7 +694,7 @@
                     return gist.id;
                 } else {
                     console.error('Failed to create gist:', response.status, responseText);
-                    updateSyncStatus('offline');
+                    updateSyncStatus('unsaved');
                     
                     if (response.status === 401) {
                         alert('GitHub token is invalid or expired. Please check your token.');
@@ -687,7 +706,7 @@
                 }
             } catch (error) {
                 console.error('Error creating gist:', error);
-                updateSyncStatus('offline');
+                updateSyncStatus('unsaved');
                 alert('Network error creating gist. Please check your internet connection.');
                 return null;
             }
@@ -709,26 +728,70 @@
                     const fileContent = gist.files['trip-expenses.json'];
                     
                     if (fileContent && fileContent.content) {
-                        const data = JSON.parse(fileContent.content);
-                        expenses = data.expenses || [];
-                        tripData = data.tripData || tripData;
+                        const cloudData = JSON.parse(fileContent.content);
+                        const cloudExpenses = cloudData.expenses || [];
+                        
+                        // Check if we have local unsaved changes
+                        const localBackup = JSON.parse(localStorage.getItem('tripExpenses_backup') || 'null');
+                        
+                        if (localBackup) {
+                            // Always check for local changes to merge
+                            const localExpenses = localBackup.expenses || [];
+                            const hasLocalChanges = localBackup.lastUpdated > cloudData.lastUpdated;
+                            const hasMoreLocalExpenses = localExpenses.length > cloudExpenses.length;
+                            
+                            // Use local data if it has more expenses OR if local timestamp is newer
+                            if (hasLocalChanges || hasMoreLocalExpenses) {
+                                // Simple merge: keep all local data (which should include previous cloud data + new offline data)
+                                expenses = localExpenses;
+                                tripData = localBackup.tripData || cloudData.tripData || tripData;
+                                
+                                // We're online and have local changes - sync them immediately
+                                document.getElementById('tripName').value = tripData.name;
+                                updateDisplay();
+                                
+                                // Auto-sync the local changes to cloud
+                                console.log('Auto-syncing local changes to cloud...');
+                                const success = await saveToGist();
+                                if (success) {
+                                    console.log('Local changes successfully synced to cloud');
+                                } else {
+                                    // If sync fails, mark as pending
+                                    setPendingSync(true);
+                                }
+                                return true;
+                            } else {
+                                // Cloud data is newer or same - use cloud data
+                                expenses = cloudExpenses;
+                                tripData = cloudData.tripData || tripData;
+                            }
+                        } else {
+                            // No local backup - use cloud data
+                            expenses = cloudExpenses;
+                            tripData = cloudData.tripData || tripData;
+                        }
+                        
                         document.getElementById('tripName').value = tripData.name;
                         updateDisplay();
-                        updateSyncStatus('online');
+                        
+                        // Only set as synced if there are no pending changes
+                        if (!hasPendingSync) {
+                            updateSyncStatus('synced');
+                        }
                         return true;
                     }
                 } else if (response.status === 404) {
-                    updateSyncStatus('offline');
+                    updateSyncStatus('unsaved');
                     console.log('Gist not found');
                     stopSync(); // Stop trying to sync if gist doesn't exist
                 } else if (response.status === 403) {
-                    updateSyncStatus('offline');
+                    updateSyncStatus('unsaved');
                     console.log('API rate limited or token invalid');
                     stopSync(); // Stop syncing on auth issues
                 }
             } catch (error) {
                 console.error('Error loading from gist:', error);
-                updateSyncStatus('offline');
+                updateSyncStatus('unsaved');
             }
             
             return false;
@@ -769,44 +832,68 @@
                 });
 
                 if (response.ok) {
-                    updateSyncStatus('online');
+                    updateSyncStatus('synced');
+                    setPendingSync(false); // This will clear local storage since sync succeeded
+                    return true; // Return success
                 } else {
                     throw new Error('Failed to update gist');
                 }
             } catch (error) {
                 console.error('Error updating gist:', error);
-                updateSyncStatus('offline');
+                updateSyncStatus('unsaved');
+                return false; // Return failure
             }
             
             isUpdating = false;
-            
-            // Also save locally as backup
-            localStorage.setItem('tripExpenses_backup', JSON.stringify(data));
         }
 
         function updateSyncStatus(status) {
             const statusEl = document.getElementById('syncStatus');
             if (!statusEl) return;
             
-            statusEl.className = `sync-status sync-${status}`;
-            
             switch(status) {
-                case 'online':
+                case 'synced':
                     statusEl.textContent = '✓ Synced';
+                    statusEl.className = 'sync-status sync-online';
                     break;
-                case 'offline':
-                    statusEl.textContent = '✗ Offline';
+                case 'unsaved':
+                    statusEl.textContent = '⚠️ Unsaved';
+                    statusEl.className = 'sync-status sync-syncing';
                     break;
                 case 'syncing':
                     statusEl.textContent = '↻ Syncing...';
+                    statusEl.className = 'sync-status sync-syncing';
                     break;
             }
         }
 
+
+        function setPendingSync(pending) {
+            console.log('setPendingSync called with:', pending);
+            hasPendingSync = pending;
+            if (pending) {
+                // Mark as having unsaved changes
+                localStorage.setItem('hasPendingSync', 'true');
+                updateSyncStatus('unsaved');
+                console.log('Status updated to unsaved');
+            } else {
+                // Successfully synced - clear all local storage
+                localStorage.removeItem('hasPendingSync');
+                localStorage.removeItem('tripExpenses_backup');
+                if (gistId) {
+                    localStorage.removeItem(`tripExpenses_${gistId}`);
+                }
+                updateSyncStatus('synced');
+            }
+        }
+
+
         function startSync() {
-            // Poll for updates every 5 seconds
+            // Poll for updates every 5 seconds (only for loading updates from other devices)
             syncInterval = setInterval(async () => {
-                if (gistId && !isUpdating) {
+                if (gistId && !isUpdating && !hasPendingSync) {
+                    // Only load from gist if we don't have pending changes
+                    // (to avoid overwriting local unsaved data)
                     await loadFromGist();
                 }
             }, 5000);
@@ -838,7 +925,13 @@
                 }
                 
                 // If not a real gist ID or loading failed, check localStorage
-                const localData = JSON.parse(localStorage.getItem(`tripExpenses_${gistId}`) || 'null');
+                let localData = JSON.parse(localStorage.getItem(`tripExpenses_${gistId}`) || 'null');
+                
+                // If no gist-specific data, check backup data
+                if (!localData) {
+                    localData = JSON.parse(localStorage.getItem('tripExpenses_backup') || 'null');
+                }
+                
                 if (localData) {
                     expenses = localData.expenses || [];
                     tripData = localData.tripData || tripData;
@@ -853,7 +946,12 @@
                         window.history.replaceState({}, '', window.location.pathname);
                     }
                     
-                    updateSyncStatus('offline');
+                    updateSyncStatus('unsaved');
+                    
+                    // If we have a real gist ID but failed to load from GitHub, mark as pending sync
+                    if (isRealGistId) {
+                        setPendingSync(true);
+                    }
                 }
             } else {
                 // Load from localStorage as fallback
@@ -883,6 +981,7 @@
                     startSync();
                 } else {
                     console.error('Failed to create gist, staying in offline mode');
+                    setPendingSync(true);
                 }
             } else {
                 // Save to localStorage with share ID
@@ -891,7 +990,21 @@
                 // Try to update gist if it's a real gist ID (not local)
                 if (!gistId.startsWith('local_') && gistId.length > 10) {
                     console.log('Updating existing gist:', gistId);
-                    await saveToGist();
+                    
+                    // Check if we're offline first
+                    if (!navigator.onLine) {
+                        console.log('Offline detected (navigator.onLine =', navigator.onLine, '), marking as pending sync');
+                        setPendingSync(true);
+                        return;
+                    }
+                    
+                    try {
+                        await saveToGist();
+                        // setPendingSync(false) is now called inside saveToGist on success
+                    } catch (error) {
+                        console.log('Failed to sync to GitHub, will retry later:', error.message);
+                        setPendingSync(true);
+                    }
                 } else {
                     console.log('Using local storage mode, gistId:', gistId);
                 }
@@ -1096,6 +1209,29 @@
             if (await checkLogin()) {
                 loadData();
                 updateDisplay();
+                
+                // Restore pending sync state from localStorage - but only if we have local data
+                const pendingSyncFlag = localStorage.getItem('hasPendingSync');
+                const hasLocalData = localStorage.getItem('tripExpenses_backup') || 
+                                   localStorage.getItem(`tripExpenses_${gistId}`);
+                                   
+                if (pendingSyncFlag === 'true' && hasLocalData) {
+                    hasPendingSync = true;
+                    updateSyncStatus('unsaved'); // Show unsaved status
+                    
+                    // If we're online and have pending sync, try to auto-sync
+                    if (navigator.onLine) {
+                        console.log('Detected pending sync on page load, attempting auto-sync...');
+                        setTimeout(async () => {
+                            const success = await saveToGist();
+                            if (success) {
+                                console.log('Auto-sync on page load successful');
+                            } else {
+                                console.log('Auto-sync on page load failed, keeping pending status');
+                            }
+                        }, 1000); // Small delay to ensure everything is loaded
+                    }
+                }
             }
         });
 
