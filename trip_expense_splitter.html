@@ -593,7 +593,14 @@
         }
 
         async function createGist() {
-            if (!githubToken) return null;
+            if (!githubToken) {
+                console.error('No GitHub token available for gist creation');
+                updateSyncStatus('offline');
+                return null;
+            }
+            
+            console.log('Creating GitHub gist with token...');
+            updateSyncStatus('syncing');
             
             const data = {
                 expenses,
@@ -622,10 +629,14 @@
                     body: JSON.stringify(gistData)
                 });
 
+                const responseText = await response.text();
+                console.log('GitHub API Response:', response.status, responseText);
+
                 if (response.ok) {
-                    const gist = await response.json();
+                    const gist = JSON.parse(responseText);
                     setGistId(gist.id);
                     updateSyncStatus('online');
+                    console.log('Gist created successfully:', gist.id);
                     
                     setTimeout(() => {
                         const shareUrl = window.location.href;
@@ -644,13 +655,21 @@
                     
                     return gist.id;
                 } else {
-                    console.error('Failed to create gist:', response.status);
+                    console.error('Failed to create gist:', response.status, responseText);
                     updateSyncStatus('offline');
+                    
+                    if (response.status === 401) {
+                        alert('GitHub token is invalid or expired. Please check your token.');
+                    } else if (response.status === 403) {
+                        alert('GitHub token lacks gist permissions. Please create a token with "gist" scope.');
+                    }
+                    
                     return null;
                 }
             } catch (error) {
                 console.error('Error creating gist:', error);
                 updateSyncStatus('offline');
+                alert('Network error creating gist. Please check your internet connection.');
                 return null;
             }
         }
@@ -785,22 +804,37 @@
             gistId = getGistId();
             
             if (gistId) {
-                // First try to load from localStorage with this share ID
+                // Check if this is a real GitHub gist ID (they're typically 32+ characters)
+                const isRealGistId = !gistId.startsWith('local_') && gistId.length >= 20;
+                
+                console.log('Found gistId:', gistId, 'isRealGistId:', isRealGistId);
+                
+                if (isRealGistId) {
+                    // Try to load from GitHub gist first
+                    const loaded = await loadFromGist();
+                    if (loaded) {
+                        startSync();
+                        return;
+                    }
+                }
+                
+                // If not a real gist ID or loading failed, check localStorage
                 const localData = JSON.parse(localStorage.getItem(`tripExpenses_${gistId}`) || 'null');
                 if (localData) {
                     expenses = localData.expenses || [];
                     tripData = localData.tripData || tripData;
                     document.getElementById('tripName').value = tripData.name;
                     updateDisplay();
-                    updateSyncStatus('offline');
-                }
-                
-                // Then try to load from GitHub gist (if it's a real gist ID)
-                if (!gistId.startsWith('local_') && gistId.length > 10) {
-                    const loaded = await loadFromGist();
-                    if (loaded) {
-                        startSync();
+                    
+                    // If we have a short/invalid gist ID and a valid token, clear it to force new gist creation
+                    if (!isRealGistId && githubToken) {
+                        console.log('Clearing invalid gistId to force new gist creation');
+                        gistId = null;
+                        localStorage.removeItem('currentGistId');
+                        window.history.replaceState({}, '', window.location.pathname);
                     }
+                    
+                    updateSyncStatus('offline');
                 }
             } else {
                 // Load from localStorage as fallback
@@ -817,12 +851,19 @@
             // Save locally immediately
             const data = { expenses, tripData, lastUpdated: Date.now() };
             localStorage.setItem('tripExpenses_backup', JSON.stringify(data));
+            
+            console.log('saveData called - gistId:', gistId, 'githubToken:', githubToken ? 'present' : 'missing');
 
             if (!gistId) {
                 // Create new gist
-                await createGist();
-                if (gistId) {
+                console.log('No gistId, creating new gist...');
+                const newGistId = await createGist();
+                console.log('createGist returned:', newGistId);
+                
+                if (newGistId) {
                     startSync();
+                } else {
+                    console.error('Failed to create gist, staying in offline mode');
                 }
             } else {
                 // Save to localStorage with share ID
@@ -830,7 +871,10 @@
                 
                 // Try to update gist if it's a real gist ID (not local)
                 if (!gistId.startsWith('local_') && gistId.length > 10) {
+                    console.log('Updating existing gist:', gistId);
                     await saveToGist();
+                } else {
+                    console.log('Using local storage mode, gistId:', gistId);
                 }
             }
         }
