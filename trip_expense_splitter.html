@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Expense Splitter</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVHJpcCBFeHBlbnNlIFNwbGl0dGVyIiwic2hvcnRfbmFtZSI6IlRyaXBTcGxpdCIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjNGY0NmU1In0=">
+    
+    <!-- No external dependencies - just GitHub API -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .trip-name {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 20px;
+            color: white;
+            text-align: center;
+            font-size: 14px;
+            width: 200px;
+        }
+
+        .trip-name::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .balance-section {
+            margin-bottom: 25px;
+        }
+
+        .individual-balances {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .balance-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .balance-title {
+            color: #64748b;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .balance-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+
+        .balance-positive {
+            color: #059669;
+        }
+
+        .balance-negative {
+            color: #dc2626;
+        }
+
+        .settlement-card {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .settlement-title {
+            color: #92400e;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .settlement-amount {
+            font-size: 28px;
+            font-weight: bold;
+            color: #92400e;
+        }
+
+        .settlement-description {
+            color: #92400e;
+            font-size: 14px;
+            margin-top: 8px;
+            opacity: 0.8;
+        }
+
+        .sync-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .sync-online {
+            background: #10b981;
+        }
+
+        .sync-offline {
+            background: #ef4444;
+        }
+
+        .sync-syncing {
+            background: #f59e0b;
+        }
+
+        .share-button {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: transform 0.2s;
+        }
+
+        .share-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .add-expense {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin-bottom: 25px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .add-expense:hover {
+            transform: translateY(-2px);
+        }
+
+        .expense-form {
+            display: none;
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .expenses-list {
+            margin-bottom: 20px;
+        }
+
+        .expenses-title {
+            color: #374151;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .expense-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .expense-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .expense-description {
+            font-weight: 600;
+            color: #1e293b;
+            flex: 1;
+        }
+
+        .expense-amount {
+            font-weight: bold;
+            color: #059669;
+            font-size: 18px;
+        }
+
+        .expense-details {
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .delete-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+
+        .summary-title {
+            color: #92400e;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #92400e;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            padding: 40px 20px;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                border-radius: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sync Status Indicator -->
+    <div id="syncStatus" class="sync-status sync-offline">✗ Offline</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>💰 Trip Splitter</h1>
+            <input type="text" class="trip-name" id="tripName" placeholder="Trip Name" value="Japan 2025">
+        </div>
+
+        <div class="content">
+            <div class="balance-section">
+                <div class="individual-balances">
+                    <div class="balance-card">
+                        <div class="balance-title">CHEN SPENT</div>
+                        <div class="balance-amount" id="chenTotal">$0.00</div>
+                    </div>
+                    <div class="balance-card">
+                        <div class="balance-title">MAYA SPENT</div>
+                        <div class="balance-amount" id="mayaTotal">$0.00</div>
+                    </div>
+                </div>
+                <div class="settlement-card">
+                    <div class="settlement-title">SETTLEMENT</div>
+                    <div class="settlement-amount" id="settlement">All Even</div>
+                    <div class="settlement-description" id="settlementDesc"></div>
+                </div>
+            </div>
+
+            <button class="add-expense" onclick="toggleExpenseForm()">
+                + Add New Expense
+            </button>
+
+            <div class="expense-form" id="expenseForm">
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="description" placeholder="What was this expense for?">
+                </div>
+                
+                <div class="form-group">
+                    <label>Amount ($)</label>
+                    <input type="number" id="amount" placeholder="0.00" step="0.01">
+                </div>
+                
+                <div class="form-group">
+                    <label>Paid by</label>
+                    <select id="paidBy">
+                        <option value="chen">Chen</option>
+                        <option value="maya">Maya</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Split</label>
+                    <select id="splitType">
+                        <option value="equal">Split Equally</option>
+                        <option value="chen">Chen Should Pay All</option>
+                        <option value="maya">Maya Should Pay All</option>
+                    </select>
+                </div>
+                
+                <div class="form-buttons">
+                    <button class="btn btn-primary" onclick="addExpense()">Add Expense</button>
+                    <button class="btn btn-secondary" onclick="toggleExpenseForm()">Cancel</button>
+                </div>
+            </div>
+
+            <div class="expenses-list">
+                <div class="expenses-title">Recent Expenses</div>
+                <div id="expensesList"></div>
+            </div>
+
+            <div class="summary" id="summary" style="display: none;">
+                <div class="summary-title">Trip Summary</div>
+                <div class="summary-item">
+                    <span>Total Expenses:</span>
+                    <span id="totalExpenses">$0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span>Chen Paid:</span>
+                    <span id="chenPaid">$0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span>Maya Paid:</span>
+                    <span id="mayaPaid">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let expenses = [];
+        let tripData = {
+            name: "Japan 2025",
+            chen: { name: "Chen", paid: 0, owes: 0 },
+            maya: { name: "Maya", paid: 0, owes: 0 }
+        };
+        
+        let gistId = null;
+        let isUpdating = false;
+        let syncInterval = null;
+        let githubToken = null;
+
+        // GitHub API functions
+        function getGistId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('gist') || localStorage.getItem('currentGistId');
+        }
+
+        function setGistId(id) {
+            gistId = id;
+            localStorage.setItem('currentGistId', id);
+            const newUrl = window.location.pathname + '?gist=' + id;
+            window.history.replaceState({}, '', newUrl);
+        }
+
+        async function createGist() {
+            const data = {
+                expenses,
+                tripData,
+                lastUpdated: Date.now()
+            };
+
+            const gistData = {
+                description: `Trip Expenses: ${tripData.name}`,
+                public: false,
+                files: {
+                    "trip-expenses.json": {
+                        content: JSON.stringify(data, null, 2)
+                    }
+                }
+            };
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                };
+
+                if (githubToken) {
+                    headers['Authorization'] = `token ${githubToken}`;
+                }
+
+                const response = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(gistData)
+                });
+
+                if (response.ok) {
+                    const gist = await response.json();
+                    setGistId(gist.id);
+                    updateSyncStatus('online');
+                    
+                    setTimeout(() => {
+                        const shareUrl = window.location.href;
+                        if (navigator.share) {
+                            navigator.share({
+                                title: 'Trip Expense Splitter',
+                                text: 'Join my trip expense tracker!',
+                                url: shareUrl
+                            });
+                        } else {
+                            prompt('Share this URL with Maya:', shareUrl);
+                        }
+                    }, 500);
+                    
+                    return gist.id;
+                } else {
+                    throw new Error('Failed to create gist');
+                }
+            } catch (error) {
+                console.error('Error creating gist:', error);
+                updateSyncStatus('offline');
+                return null;
+            }
+        }
+
+        async function loadFromGist() {
+            if (!gistId) return false;
+
+            try {
+                const response = await fetch(`https://api.github.com/gists/${gistId}`);
+                
+                if (response.ok) {
+                    const gist = await response.json();
+                    const fileContent = gist.files['trip-expenses.json'];
+                    
+                    if (fileContent && fileContent.content) {
+                        const data = JSON.parse(fileContent.content);
+                        expenses = data.expenses || [];
+                        tripData = data.tripData || tripData;
+                        document.getElementById('tripName').value = tripData.name;
+                        updateDisplay();
+                        updateSyncStatus('online');
+                        return true;
+                    }
+                } else if (response.status === 404) {
+                    updateSyncStatus('offline');
+                    alert('Trip not found. This link may be invalid or the trip may have been deleted.');
+                }
+            } catch (error) {
+                console.error('Error loading from gist:', error);
+                updateSyncStatus('offline');
+            }
+            
+            return false;
+        }
+
+        async function saveToGist() {
+            if (!gistId || isUpdating) return;
+            
+            isUpdating = true;
+            updateSyncStatus('syncing');
+
+            const data = {
+                expenses,
+                tripData,
+                lastUpdated: Date.now()
+            };
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                };
+
+                if (githubToken) {
+                    headers['Authorization'] = `token ${githubToken}`;
+                }
+
+                const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        files: {
+                            "trip-expenses.json": {
+                                content: JSON.stringify(data, null, 2)
+                            }
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    updateSyncStatus('online');
+                } else {
+                    throw new Error('Failed to update gist');
+                }
+            } catch (error) {
+                console.error('Error updating gist:', error);
+                updateSyncStatus('offline');
+            }
+            
+            isUpdating = false;
+            
+            // Also save locally as backup
+            localStorage.setItem('tripExpenses_backup', JSON.stringify(data));
+        }
+
+        function updateSyncStatus(status) {
+            const statusEl = document.getElementById('syncStatus');
+            if (!statusEl) return;
+            
+            statusEl.className = `sync-status sync-${status}`;
+            
+            switch(status) {
+                case 'online':
+                    statusEl.textContent = '✓ Synced';
+                    break;
+                case 'offline':
+                    statusEl.textContent = '✗ Offline';
+                    break;
+                case 'syncing':
+                    statusEl.textContent = '↻ Syncing...';
+                    break;
+            }
+        }
+
+        function startSync() {
+            // Poll for updates every 5 seconds
+            syncInterval = setInterval(async () => {
+                if (gistId && !isUpdating) {
+                    await loadFromGist();
+                }
+            }, 5000);
+        }
+
+        function stopSync() {
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+        }
+
+        async function loadData() {
+            gistId = getGistId();
+            
+            if (gistId) {
+                // Try to load existing gist
+                const loaded = await loadFromGist();
+                if (loaded) {
+                    startSync();
+                }
+            } else {
+                // Load from localStorage as fallback
+                const saved = JSON.parse(localStorage.getItem('tripExpenses_backup') || 'null');
+                if (saved) {
+                    expenses = saved.expenses || [];
+                    tripData = saved.tripData || tripData;
+                    document.getElementById('tripName').value = tripData.name;
+                }
+            }
+        }
+
+        async function saveData() {
+            // Save locally immediately
+            const data = { expenses, tripData, lastUpdated: Date.now() };
+            localStorage.setItem('tripExpenses_backup', JSON.stringify(data));
+
+            if (!gistId) {
+                // Create new gist
+                await createGist();
+                if (gistId) {
+                    startSync();
+                }
+            } else {
+                // Update existing gist
+                await saveToGist();
+            }
+        }
+
+        function toggleExpenseForm() {
+            const form = document.getElementById('expenseForm');
+            if (form.style.display === 'none' || !form.style.display) {
+                form.style.display = 'block';
+                document.getElementById('description').focus();
+            } else {
+                form.style.display = 'none';
+                clearForm();
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('description').value = '';
+            document.getElementById('amount').value = '';
+            document.getElementById('paidBy').value = 'chen';
+            document.getElementById('splitType').value = 'equal';
+        }
+
+        function addExpense() {
+            const description = document.getElementById('description').value.trim();
+            const amount = parseFloat(document.getElementById('amount').value);
+            const paidBy = document.getElementById('paidBy').value;
+            const splitType = document.getElementById('splitType').value;
+
+            if (!description || !amount || amount <= 0) {
+                alert('Please fill in all fields with valid values');
+                return;
+            }
+
+            const expense = {
+                id: Date.now(),
+                description,
+                amount,
+                paidBy,
+                splitType,
+                date: new Date().toLocaleDateString()
+            };
+
+            expenses.unshift(expense);
+            toggleExpenseForm();
+            updateDisplay();
+            saveData();
+        }
+
+        function deleteExpense(id) {
+            if (confirm('Delete this expense?')) {
+                expenses = expenses.filter(e => e.id !== id);
+                updateDisplay();
+                saveData();
+            }
+        }
+
+        function calculateBalances() {
+            let chenPaid = 0, chenOwes = 0;
+            let mayaPaid = 0, mayaOwes = 0;
+
+            expenses.forEach(expense => {
+                if (expense.paidBy === 'chen') {
+                    chenPaid += expense.amount;
+                } else if (expense.paidBy === 'maya') {
+                    mayaPaid += expense.amount;
+                }
+
+                if (expense.splitType === 'equal') {
+                    chenOwes += expense.amount / 2;
+                    mayaOwes += expense.amount / 2;
+                } else if (expense.splitType === 'chen') {
+                    chenOwes += expense.amount;
+                } else if (expense.splitType === 'maya') {
+                    mayaOwes += expense.amount;
+                }
+            });
+
+            tripData.chen.paid = chenPaid;
+            tripData.chen.owes = chenOwes;
+            tripData.maya.paid = mayaPaid;
+            tripData.maya.owes = mayaOwes;
+            
+            return {
+                chenBalance: chenPaid - chenOwes,
+                mayaBalance: mayaPaid - mayaOwes,
+                chenPaid,
+                mayaPaid,
+                chenOwes,
+                mayaOwes
+            };
+        }
+
+        function updateDisplay() {
+            const balances = calculateBalances();
+            
+            // Update individual spending totals
+            document.getElementById('chenTotal').textContent = `$${balances.chenPaid.toFixed(2)}`;
+            document.getElementById('mayaTotal').textContent = `$${balances.mayaPaid.toFixed(2)}`;
+            
+            // Update settlement
+            const settlementEl = document.getElementById('settlement');
+            const settlementDescEl = document.getElementById('settlementDesc');
+            
+            const netDifference = balances.chenBalance;
+            
+            if (Math.abs(netDifference) < 0.01) {
+                settlementEl.textContent = 'All Even!';
+                settlementEl.className = 'settlement-amount';
+                settlementDescEl.textContent = 'No one owes anyone money';
+            } else if (netDifference > 0) {
+                settlementEl.textContent = `$${netDifference.toFixed(2)}`;
+                settlementEl.className = 'settlement-amount balance-positive';
+                settlementDescEl.textContent = 'Maya owes Chen';
+            } else {
+                settlementEl.textContent = `$${Math.abs(netDifference).toFixed(2)}`;
+                settlementEl.className = 'settlement-amount balance-negative';
+                settlementDescEl.textContent = 'Chen owes Maya';
+            }
+
+            const expensesList = document.getElementById('expensesList');
+            
+            if (expenses.length === 0) {
+                expensesList.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <div>No expenses yet</div>
+                        <div style="font-size: 14px; margin-top: 8px;">Add your first expense to get started!</div>
+                    </div>
+                `;
+            } else {
+                expensesList.innerHTML = expenses.map(expense => `
+                    <div class="expense-item">
+                        <div class="expense-header">
+                            <div class="expense-description">${expense.description}</div>
+                            <div class="expense-amount">$${expense.amount.toFixed(2)}</div>
+                            <button class="delete-btn" onclick="deleteExpense(${expense.id})">×</button>
+                        </div>
+                        <div class="expense-details">
+                            Paid by ${expense.paidBy === 'chen' ? 'Chen' : 'Maya'} • 
+                            ${expense.splitType === 'equal' ? 'Split equally' : 
+                              expense.splitType === 'chen' ? 'Chen pays all' : 'Maya pays all'} • 
+                            ${expense.date}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Update summary
+            if (expenses.length > 0) {
+                document.getElementById('summary').style.display = 'block';
+                document.getElementById('totalExpenses').textContent = 
+                    `$${expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}`;
+                document.getElementById('chenPaid').textContent = `$${tripData.chen.paid.toFixed(2)}`;
+                document.getElementById('mayaPaid').textContent = `$${tripData.maya.paid.toFixed(2)}`;
+            } else {
+                document.getElementById('summary').style.display = 'none';
+            }
+        }
+
+        document.getElementById('tripName').addEventListener('input', (e) => {
+            tripData.name = e.target.value;
+            saveData();
+        });
+
+        // Initialize app
+        loadData();
+        updateDisplay();
+
+        // PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swScript = `
+                    const CACHE_NAME = 'trip-splitter-v1';
+                    self.addEventListener('install', (e) => {
+                        e.waitUntil(
+                            caches.open(CACHE_NAME).then(cache => {
+                                return cache.addAll(['/']);
+                            })
+                        );
+                    });
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(
+                            caches.match(e.request).then(response => {
+                                return response || fetch(e.request);
+                            })
+                        );
+                    });
+                `;
+                
+                const blob = new Blob([swScript], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                
+                navigator.serviceWorker.register(swUrl);
+            });
+        }
+    </script>
+</body>
+</html>
